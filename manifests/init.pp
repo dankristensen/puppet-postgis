@@ -53,7 +53,7 @@ class postgis (
   $script_path = $::osfamily ? {
     Debian => $version ? {
       '8.3'           => '/usr/share/postgresql-8.3-postgis',
-      /(8.4|9.0|9.1)/ => "/usr/share/postgresql/${version}/contrib/postgis-1.5",
+      /(8.4|9.0|9.1|9.2)/ => "/usr/share/postgresql/${version}/contrib/postgis-2.0",
     },
     RedHat => $version ? {
       '9.1' => '/usr/pgsql-9.1/share/contrib/postgis-1.5',
@@ -61,11 +61,19 @@ class postgis (
   }
 
   $packages = $::osfamily ? {
-    Debian => ["postgresql-${version}-postgis", 'postgis'],
+    Debian => ["postgresql-${version}-postgis-2.0"],
     RedHat => ['postgis91', 'postgis91-utils'],
   }
 
   Class['postgresql::server']
+  ->
+  package { ['software-properties-common', 'python-software-properties']:
+    ensure => 'present',
+  }
+  ->
+  exec {'add-apt-repository ppa:ubuntugis/ubuntugis-unstable': }
+  ->
+  exec {'apt-get update': }
   ->
   package { $packages:
     ensure => 'present',
@@ -73,7 +81,6 @@ class postgis (
   ->
   postgresql::server::database { 'template_postgis':
     istemplate => true,
-    template   => 'template1',
   }
   ->
   exec { 'createlang plpgsql template_postgis':
