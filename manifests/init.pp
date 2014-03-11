@@ -71,7 +71,7 @@ class postgis (
     istemplate => true,
   }
   ->
-  exec { 'psql -q -d template_postgis -c "CREATE EXTENSION postgis;"':
+  exec { 'psql -q -d template_postgis -c "CREATE EXTENSION IF NOT EXISTS postgis;"':
     user    => 'postgres',
   }
   #
