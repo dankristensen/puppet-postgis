@@ -1,5 +1,13 @@
-PostGis Puppet module
+PostGIS Puppet module
 =====================
+
+Supported Environments:
+-----
+
+PostgreSQL 9.1+
+PostGIS 2.1+
+Ubuntu 12.04
+
 
 Usage
 -----
@@ -8,28 +16,32 @@ Usage
 Exec {
   path => '/usr/bin:/usr/sbin/:/bin:/sbin:/usr/local/bin:/usr/local/sbin',
 }
-include ::postgis
+
+class {'postgresql::globals':
+  version => '9.3',
+  manage_package_repo => true,
+  encoding => 'UTF8'
+} ->
+class { 'postgresql::server': 
+  ensure => 'present'
+} 
+
+class { 'postgis': 
+    $postgis_version => 2.1
+}
+
 ```
 
-This will install the postgis package, create a `template\_postgis` template
+This will install the postgresql-9.3-postgis-2.1 package, create a `template\_postgis` template
 database with geometry_columns and geometry_columns tables and grant some
 privileges to PUBLIC role.
 
-This module is provided by [Camptocamp](http://www.camptocamp.com/)
-
-## Contributing
-
-Please report bugs and feature request using [GitHub issue
-tracker](https://github.com/camptocamp/puppet-dhcp/issues).
-
-For pull requests, it is very much appreciated to check your Puppet manifest
-with [puppet-lint](https://github.com/camptocamp/puppet-dhcp/issues) to follow
-the recommended Puppet style guidelines from the
-[Puppet Labs style guide](http://docs.puppetlabs.com/guides/style_guide.html).
+This module is originally by [Camptocamp](http://www.camptocamp.com/) and modified to
+work with more modern versions of bioth 
 
 ## License
 
-Copyright (c) 2013 <mailto:puppet@camptocamp.com> All rights reserved.
+Copyright (c) 2013 <mailto:christian@propertybase.com> All rights reserved.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by

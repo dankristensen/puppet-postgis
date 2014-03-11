@@ -11,128 +11,96 @@
 # Sample usage:
 #   include postgis
 #
+
 class postgis (
-  $version       = $::postgresql::globals::default_version,
+  $version       = $::postgresql::globals::version,
   $check_version = true,
+  $postgis_version = 2.1
 ) {
+
+  #
+  # check if the specified os, postgres and postgis versions are supported
+  # by this script
+  #
 
   if ($check_version) {
     case $::osfamily {
       'Debian' : {
         case $::lsbdistcodename {
-          'lenny': {
-            validate_re($version, '^(8\.[34])$', "version ${version} is not supported for ${::operatingsystem} ${::lsbdistcodename}!")
-          }
-          'squeeze': {
-            validate_re($version, '^(8\.4|9\.0|9\.1)$', "version ${version} is not supported for ${::operatingsystem} ${::lsbdistcodename}!")
-          }
-          'wheezy': {
-            validate_re($version, '^9\.1$', "version ${version} is not supported for ${::operatingsystem} ${::lsbdistcodename}!")
-          }
-          'lucid': {
-            validate_re($version, '^8\.4$', "version ${version} is not supported for ${::operatingsystem} ${::lsbdistcodename}!")
-          }
           /^(precise|quantal)$/: {
-            validate_re($version, '^9\.1$', "version ${version} is not supported for ${::operatingsystem} ${::lsbdistcodename}!")
+            validate_re($version, '(9\.1|9\.2|9\.3)$', "version ${version} is not supported for ${::operatingsystem} ${::lsbdistcodename}!")
+            validate_re($postgis_version, '2.1', "Only PostGIS 2.1 is currently supported!")
           }
           default: { fail "${::operatingsystem} ${::lsbdistcodename} is not yet supported!" }
-        }
-      }
-      'RedHat' : {
-        case $::lsbmajdistrelease {
-          '6': {
-            validate_re($version, '^8\.4$', "version ${version} is not supported for ${::operatingsystem} ${::lsbdistcodename}!")
-          }
-          default: { fail "${::operatingsystem} ${::lsbdistrelease} is not yet supported!" }
         }
       }
       default: { fail "${::operatingsystem} is not yet supported!" }
     }
   }
-
+  
   $script_path = $::osfamily ? {
     Debian => $version ? {
-      '8.3'           => '/usr/share/postgresql-8.3-postgis',
-      /(8.4|9.0|9.1|9.2)/ => "/usr/share/postgresql/${version}/contrib/postgis-2.0",
-    },
-    RedHat => $version ? {
-      '9.1' => '/usr/pgsql-9.1/share/contrib/postgis-1.5',
-    },
+      /(9.1|9.2|9.3)/ => "/usr/share/postgresql/${version}/contrib/postgis-${postgis_version}",
+    }
   }
 
   $packages = $::osfamily ? {
-    Debian => ["postgresql-${version}-postgis-2.0"],
-    RedHat => ['postgis91', 'postgis91-utils'],
+    Debian => ["postgresql-${version}-postgis-${postgis_version}"]
   }
 
-  Class['postgresql::server']
+  #
+  # add postgis repository
+  #
+  exec {'wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -':}
   ->
-  package { ['software-properties-common', 'python-software-properties']:
-    ensure => 'present',
+  exec {'echo "deb http://apt.postgresql.org/pub/repos/apt/ precise-pgdg main" >> /etc/apt/sources.list.d/postgresql.list':
+    user => 'root',
+    require => Class['postgresql::server']
   }
-  ->
-  exec {'add-apt-repository ppa:ubuntugis/ubuntugis-unstable': }
   ->
   exec {'apt-get update': }
   ->
   package { $packages:
     ensure => 'present',
   }
+  #
+  # create template database and install postgis in it
+  #
   ->
   postgresql::server::database { 'template_postgis':
     istemplate => true,
   }
   ->
-  exec { 'createlang plpgsql template_postgis':
+  exec { 'psql -q -d template_postgis -c "CREATE EXTENSION postgis;"':
     user    => 'postgres',
-    unless  => 'createlang -l template_postgis | grep -q plpgsql',
   }
-
-  exec { "psql -q -d template_postgis -f ${script_path}/postgis.sql":
-    user    => 'postgres',
-    unless  => 'echo "\dt" | psql -d template_postgis | grep -q geometry_columns',
-    require => Exec['createlang plpgsql template_postgis'],
+  #
+  # set appropriate access permissions
+  #
+  ->
+  postgresql::server::table_grant { 'GRANT ALL ON geometry_columns TO public':
+    privilege => 'ALL',
+    table     => 'geometry_columns',
+    db        => 'template_postgis',
+    role      => 'public',
+    notify    => postgresql_psql['vacuum postgis'],
+  } 
+  ->
+  postgresql::server::table_grant { 'GRANT SELECT ON spatial_ref_sys TO public':
+    privilege => 'SELECT',
+    table     => 'spatial_ref_sys',
+    db        => 'template_postgis',
+    role      => 'public',
+    notify    => postgresql_psql['vacuum postgis'],
   }
-
-  exec { "psql -q -d template_postgis -f ${script_path}/spatial_ref_sys.sql":
-    user    => 'postgres',
-    unless  => 'test $(psql -At -d template_postgis -c "select count(*) from spatial_ref_sys") -ne 0',
-    require => Exec['createlang plpgsql template_postgis'],
-  }
-
-  if $version >= '9.1' {
-    postgresql::server::table_grant { 'GRANT ALL ON geometry_columns TO public':
-      privilege => 'ALL',
-      table     => 'geometry_columns',
-      db        => 'template_postgis',
-      role      => 'public',
-      require   => Exec["psql -q -d template_postgis -f ${script_path}/postgis.sql"],
-      notify    => Postgresql_psql['vacuum postgis'],
-    }
-    postgresql::server::table_grant { 'GRANT SELECT ON spatial_ref_sys TO public':
-      privilege => 'SELECT',
-      table     => 'spatial_ref_sys',
-      db        => 'template_postgis',
-      role      => 'public',
-      require   => Exec["psql -q -d template_postgis -f ${script_path}/spatial_ref_sys.sql"],
-      notify    => Postgresql_psql['vacuum postgis'],
-    }
-  } else {
-    # SELECT 1 WHERE has_table_privilege('public',...) does not work before 9.1
-    exec { 'echo GRANT ALL ON geometry_columns TO public | psql -q':
-      refreshonly => true,
-      subscribe   => Exec["psql -q -d template_postgis -f ${script_path}/postgis.sql"],
-    }
-    exec { 'echo GRANT SELECT ON spatial_ref_sys TO public | psql -q':
-      refreshonly => true,
-      subscribe   => Exec["psql -q -d template_postgis -f ${script_path}/spatial_ref_sys.sql"],
-    }
-  }
+  
+  #
+  # VACUUM if necessary
+  #
 
   postgresql_psql { 'vacuum postgis':
     command     => 'VACUUM FREEZE',
     db          => 'template_postgis',
     refreshonly => true,
   }
-
 }
