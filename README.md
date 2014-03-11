@@ -8,6 +8,7 @@ PostgreSQL 9.1+
 PostGIS 2.1+
 Ubuntu 12.04
 
+Use with https://github.com/puppetlabs/puppetlabs-postgresql
 
 Usage
 -----
