@@ -27,7 +27,7 @@ class { 'postgresql::server':
 } 
 
 class { 'postgis': 
-    $postgis_version => 2.1
+  postgis_version => 2.1
 }
 
 ```
