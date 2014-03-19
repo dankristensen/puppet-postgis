@@ -27,7 +27,7 @@ class postgis (
     case $::osfamily {
       'Debian' : {
         case $::lsbdistcodename {
-          /^(precise|quantal)$/: {
+          /^(precise|quantal|wheezy)$/: {
             validate_re($version, '(9\.1|9\.2|9\.3)$', "version ${version} is not supported for ${::operatingsystem} ${::lsbdistcodename}!")
             validate_re($postgis_version, '2.1', "Only PostGIS 2.1 is currently supported!")
           }
