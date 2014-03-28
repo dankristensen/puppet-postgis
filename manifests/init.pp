@@ -51,14 +51,16 @@ class postgis (
   #
   # add postgis repository
   #
-  exec {'wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -':}
-  ->
-  exec {'echo "deb http://apt.postgresql.org/pub/repos/apt/ precise-pgdg main" >> /etc/apt/sources.list.d/postgresql.list':
-    user => 'root',
+#  exec {'wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -':}
+#  ->
+#  exec {'echo "deb http://apt.postgresql.org/pub/repos/apt/ precise-pgdg main" >> /etc/apt/sources.list.d/postgresql.list':
+#    user => 'root',
+#    require => Class['postgresql::server']
+#  }
+#  ->
+  exec {'apt-get update': 
     require => Class['postgresql::server']
   }
-  ->
-  exec {'apt-get update': }
   ->
   package { $packages:
     ensure => 'present',
